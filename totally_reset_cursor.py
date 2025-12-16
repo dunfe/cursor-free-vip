@@ -63,9 +63,14 @@ def get_cursor_paths(translator=None) -> Tuple[str, str]:
         os.makedirs(config_dir)
     
     # Default paths for different systems
+    localappdata = os.getenv("LOCALAPPDATA", "")
+    programfiles = os.getenv("PROGRAMFILES", r"C:\Program Files")
     default_paths = {
         "Darwin": "/Applications/Cursor.app/Contents/Resources/app",
-        "Windows": os.path.join(os.getenv("LOCALAPPDATA", ""), "Programs", "Cursor", "resources", "app"),
+        "Windows": [
+            os.path.join(localappdata, "Programs", "Cursor", "resources", "app"),
+            os.path.join(programfiles, "Cursor", "resources", "app")
+        ],
         "Linux": ["/opt/Cursor/resources/app", "/usr/share/cursor/resources/app", os.path.expanduser("~/.local/share/cursor/resources/app")]
     }
     
@@ -96,7 +101,14 @@ def get_cursor_paths(translator=None) -> Tuple[str, str]:
         if system == "Darwin":
             config.set('MacPaths', 'cursor_path', default_paths["Darwin"])
         elif system == "Windows":
-            config.set('WindowsPaths', 'cursor_path', default_paths["Windows"])
+            # For Windows, try to find the first existing path
+            for path in default_paths["Windows"]:
+                if os.path.exists(path):
+                    config.set('WindowsPaths', 'cursor_path', path)
+                    break
+            else:
+                # If no path exists, use the first one as default
+                config.set('WindowsPaths', 'cursor_path', default_paths["Windows"][0])
         elif system == "Linux":
             # For Linux, try to find the first existing path
             for path in default_paths["Linux"]:
@@ -126,6 +138,17 @@ def get_cursor_paths(translator=None) -> Tuple[str, str]:
         raise OSError(translator.get('reset.path_not_configured') if translator else "未配置 Cursor 路徑")
     
     base_path = config.get(section, 'cursor_path')
+    
+    # For Windows, try to find the first existing path if the configured one doesn't exist
+    if system == "Windows" and not os.path.exists(base_path):
+        for path in default_paths["Windows"]:
+            if os.path.exists(path):
+                base_path = path
+                # Update config with the found path
+                config.set(section, 'cursor_path', path)
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    config.write(f)
+                break
     
     # For Linux, try to find the first existing path if the configured one doesn't exist
     if system == "Linux" and not os.path.exists(base_path):
@@ -238,6 +261,20 @@ def get_workbench_cursor_path(translator=None) -> str:
 
     if system == "Windows":
         base_path = config.get('WindowsPaths', 'cursor_path')
+        main_path = os.path.join(base_path, paths_map[system]["main"])
+        
+        # If path doesn't exist, try fallback paths
+        if not os.path.exists(main_path):
+            localappdata = os.getenv("LOCALAPPDATA", "")
+            programfiles = os.getenv("PROGRAMFILES", r"C:\Program Files")
+            fallback_paths = [
+                os.path.join(localappdata, "Programs", "Cursor", "resources", "app"),
+                os.path.join(programfiles, "Cursor", "resources", "app")
+            ]
+            for fallback_base in fallback_paths:
+                fallback_main = os.path.join(fallback_base, paths_map[system]["main"])
+                if os.path.exists(fallback_main):
+                    return fallback_main
     elif system == "Darwin":
         base_path = paths_map[system]["base"]
         if config.has_section('MacPaths') and config.has_option('MacPaths', 'cursor_path'):

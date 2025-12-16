@@ -118,14 +118,35 @@ def setup_config(translator=None):
         if sys.platform == "win32":
             appdata = os.getenv("APPDATA")
             localappdata = os.getenv("LOCALAPPDATA", "")
+            programfiles = os.getenv("PROGRAMFILES", r"C:\Program Files")
+            
+            # Check both user-level and system-level install paths for Cursor
+            user_cursor_path = os.path.join(localappdata, "Programs", "Cursor", "resources", "app")
+            system_cursor_path = os.path.join(programfiles, "Cursor", "resources", "app")
+            
+            # Use the path that exists, preferring user-level install
+            if os.path.exists(user_cursor_path):
+                cursor_path = user_cursor_path
+                update_yml_path = os.path.join(localappdata, "Programs", "Cursor", "resources", "app-update.yml")
+                product_json_path = os.path.join(localappdata, "Programs", "Cursor", "resources", "app", "product.json")
+            elif os.path.exists(system_cursor_path):
+                cursor_path = system_cursor_path
+                update_yml_path = os.path.join(programfiles, "Cursor", "resources", "app-update.yml")
+                product_json_path = os.path.join(programfiles, "Cursor", "resources", "app", "product.json")
+            else:
+                # Default to user-level path if neither exists
+                cursor_path = user_cursor_path
+                update_yml_path = os.path.join(localappdata, "Programs", "Cursor", "resources", "app-update.yml")
+                product_json_path = os.path.join(localappdata, "Programs", "Cursor", "resources", "app", "product.json")
+            
             default_config['WindowsPaths'] = {
                 'storage_path': os.path.join(appdata, "Cursor", "User", "globalStorage", "storage.json"),
                 'sqlite_path': os.path.join(appdata, "Cursor", "User", "globalStorage", "state.vscdb"),
                 'machine_id_path': os.path.join(appdata, "Cursor", "machineId"),
-                'cursor_path': os.path.join(localappdata, "Programs", "Cursor", "resources", "app"),
+                'cursor_path': cursor_path,
                 'updater_path': os.path.join(localappdata, "cursor-updater"),
-                'update_yml_path': os.path.join(localappdata, "Programs", "Cursor", "resources", "app-update.yml"),
-                'product_json_path': os.path.join(localappdata, "Programs", "Cursor", "resources", "app", "product.json")
+                'update_yml_path': update_yml_path,
+                'product_json_path': product_json_path
             }
             # Create storage directory
             os.makedirs(os.path.dirname(default_config['WindowsPaths']['storage_path']), exist_ok=True)
